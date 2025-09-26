@@ -1,46 +1,48 @@
 package dev.example.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import dev.example.model.User;
+import dev.example.service.UserService;
 import org.springframework.web.bind.annotation.*;
-import java.util.ArrayList;
+
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/users")
 public class UserController {
 
-    private static final Logger log = LoggerFactory.getLogger(UserController.class);
+    private final UserService userService;
 
-    private final List<User> users = new ArrayList<>();
+    // SonarQube: final 필드는 생성자에서 주입해야 함 (Injection 방식 권고)
+    // 현재는 필드 인젝션으로 되어있다고 가정
+    // @Autowired
+    // private UserService userService;
 
-    public UserController() {
-        users.add(new User("Alice"));
-        users.add(new User("Bob"));
-        users.add(new User("Charlie"));
+    public UserController(UserService userService) {
+        this.userService = userService;
     }
 
-    @GetMapping
-    public List<User> getAll() {
-        log.info("GET /api/users 호출됨, 총 사용자 수: ", users.size());
-        return users;
+    /**
+     * [문제 1 연동] 검색어에 SQL Injection 취약점이 발생할 수 있습니다.
+     * @param name 검색어
+     */
+    @GetMapping("/search")
+    public List<User> search(@RequestParam String name) {
+        return userService.searchUsers(name);
     }
 
-    @PostMapping
-    public User create(@RequestBody User user) {
-        users.add(user);
-        log.info("New user created: {}", user.getName());
-        return user;
-    }
+    /**
+     * [문제 3 연동] 복잡한 승격 로직을 호출합니다.
+     */
+    @PostMapping("/promote")
+    public String promote(@RequestBody User user,
+                          @RequestParam int score,
+                          @RequestParam boolean isManager) {
+        // [문제 6: 불필요한 null 검사]
+        // Spring @RequestBody는 null일 가능성이 낮지만, 다른 곳에서 전달될 경우를 대비해
+        // 여기서 user == null 체크가 없으면 NullPointerDereference 버그가 될 수 있습니다.
+        // 현재는 Controller 수준에서 간단한 로직이므로 큰 문제로 보이지 않으나,
+        // Service에서 처리하는 것이 일반적입니다.
 
-    public static class User {
-        private String name;
-
-        public User() { }
-
-        public User(String name) { this.name = name; }
-
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
+        return userService.processUserPromotion(user, score, isManager);
     }
 }
